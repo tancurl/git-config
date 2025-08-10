@@ -29,8 +29,9 @@ type Model struct {
 }
 
 var (
-	listStyle    = lipgloss.NewStyle().Width(40).MarginRight(2)
-	previewStyle = lipgloss.NewStyle().Width(50).Padding(1)
+	outerStyle   = lipgloss.NewStyle().Margin(1)                  // outer gap
+	listStyle    = lipgloss.NewStyle().Width(40).MarginRight(2)   // left list
+	previewStyle = lipgloss.NewStyle().Width(50).PaddingTop(2)    // preview with top padding
 )
 
 var sampleYAML = `
@@ -110,7 +111,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	left := listStyle.Render(m.list.View())
 	right := previewStyle.Render(m.preview)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return outerStyle.Render(mainContent) // add outer gap
 }
 
 func main() {
