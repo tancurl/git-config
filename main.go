@@ -2,124 +2,179 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
-	"gopkg.in/yaml.v3"
-
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"gopkg.in/yaml.v3"
 )
 
-type Item struct {
-	TitleText       string
-	DescriptionText string
-	Details         string
+type User struct {
+	Name string `yaml:"name"`
+	Mail string `yaml:"mail"`
+	Sig  string `yaml:"sig"`
 }
 
-func (i Item) Title() string       { return i.TitleText }
-func (i Item) Description() string { return i.DescriptionText }
-func (i Item) FilterValue() string { return i.TitleText }
+type KeyEntry struct {
+	Key    string `yaml:"key"`
+	Create string `yaml:"create"`
+	Expire string `yaml:"expire,omitempty"`
+	Algo   string `yaml:"algo"`
+	Users  []User `yaml:"users"`
+}
 
-type Model struct {
-	list    list.Model
-	items   []Item
-	preview string
+type GPGData struct {
+	GPG []KeyEntry `yaml:"gpg"`
+}
+
+type item struct {
+	title       string
+	description string
+	entry       KeyEntry
+}
+
+func (i item) Title() string       { return i.title }
+func (i item) Description() string { return i.description }
+func (i item) FilterValue() string { return i.title + " " + i.description }
+
+type model struct {
+	list     list.Model
+	choice   *KeyEntry
+	quitting bool
 }
 
 var (
-	outerStyle   = lipgloss.NewStyle().Margin(1)                  // outer gap
-	listStyle    = lipgloss.NewStyle().Width(40).MarginRight(2)   // left list
-	previewStyle = lipgloss.NewStyle().Width(50).PaddingTop(2)    // preview with top padding
+	listStyle    = lipgloss.NewStyle().Width(40).MarginRight(2).Padding(1)
+	// previewStyle = lipgloss.NewStyle().Width(60).Padding(1).MarginTop(1)
+
+	// listStyle = lipgloss.NewStyle().
+	// 	Width(60).
+	// 	Padding(1).
+	// 	MarginTop(1).
+	// 	Foreground(lipgloss.Color("#00ff00")). // bright green text
+	// 	Background(lipgloss.Color("#000000")). // black background
+	// 	Bold(true)
+
+	previewStyle = lipgloss.NewStyle().
+		Width(60).
+		Padding(4).
+		MarginLeft(1).
+		Foreground(lipgloss.Color("#FAFAFA")).   // light gray text
+		// Background(lipgloss.Color("#1E1E1E")).   // dark background
+		Bold(false)
+
+	pointStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#aaaaaa")).   // light gray text
+		// Background(lipgloss.Color("#1E1E1E")).   // dark background
+		Bold(false)
+
+	statusMessageStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#04B575"}).Render
 )
 
-var sampleYAML = `
-- title: Server Alpha
-  description: Primary API server
-  details: |
-    OS: Ubuntu 24.04
-    IP: 10.0.0.1
-    Status: Online
-
-- title: Server Beta
-  description: Backup server
-  details: |
-    OS: Rocky Linux 9
-    IP: 10.0.0.2
-    Status: Maintenance
-`
-
-func parseYAML(data string) ([]Item, error) {
-	var raw []map[string]string
-	if err := yaml.Unmarshal([]byte(data), &raw); err != nil {
-		return nil, err
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <yamlfile>")
+		os.Exit(1)
 	}
-	var items []Item
-	for _, entry := range raw {
-		items = append(items, Item{
-			TitleText:       entry["title"],
-			DescriptionText: entry["description"],
-			Details:         entry["details"],
-		})
-	}
-	return items, nil
-}
 
-func initialModel() Model {
-	items, err := parseYAML(sampleYAML)
+	data, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var listItems []list.Item
-	for _, it := range items {
-		listItems = append(listItems, it)
+	var gpgData GPGData
+	if err := yaml.Unmarshal(data, &gpgData); err != nil {
+		log.Fatal(err)
 	}
 
-	l := list.New(listItems, list.NewDefaultDelegate(), 40, 20)
-	l.Title = "Servers"
+	items := []list.Item{}
+	for _, k := range gpgData.GPG {
+		if len(k.Users) > 0 {
+			title := k.Users[0].Name
+			desc := k.Users[0].Mail
+			items = append(items, item{title, desc, k})
+		}
+	}
 
-	return Model{
-		list:    l,
-		items:   items,
-		preview: items[0].Details,
+	const defaultHeight = 20
+	const defaultWidth = 40
+	l := list.New(items, list.NewDefaultDelegate(), defaultWidth, defaultHeight)
+	l.Title = "Git Config Manager"
+	l.SetShowHelp(false)
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(true)
+
+	m := model{list: l}
+	if err := tea.NewProgram(m).Start(); err != nil {
+		log.Fatal(err)
 	}
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd {
+	return nil
+}
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.String() == "q" {
+		switch msg.String() {
+		case "enter":
+			if i, ok := m.list.SelectedItem().(item); ok {
+				m.choice = &i.entry
+				fmt.Println(pointStyle.Render("Selected Key:"), m.choice.Key)
+				fmt.Println("Algorithm:", m.choice.Algo)
+				fmt.Println("Created:", m.choice.Create)
+				fmt.Println("Expire:", m.choice.Expire)
+				for _, u := range m.choice.Users {
+					fmt.Printf("User: %s <%s> sig: %s\n", u.Name, u.Mail, u.Sig)
+				}
+				return m, tea.Quit
+			}
+		case "q", "esc":
+			m.quitting = true
 			return m, tea.Quit
 		}
 	}
 
+	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-
-	if sel, ok := m.list.SelectedItem().(Item); ok {
-		m.preview = sel.Details
-	}
-
 	return m, cmd
 }
 
-func (m Model) View() string {
-	left := listStyle.Render(m.list.View())
-	right := previewStyle.Render(m.preview)
-	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
-	return outerStyle.Render(mainContent) // add outer gap
-}
-
-func main() {
-	p := tea.NewProgram(initialModel())
-	if err := p.Start(); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+func (m model) View() string {
+	if m.choice != nil {
+		return ""
 	}
+
+	left := listStyle.Render(m.list.View())
+	right := previewStyle.Render(m.previewView())
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
+func (m model) previewView() string {
+	if i, ok := m.list.SelectedItem().(item); ok {
+		k := i.entry
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("key"), k.Key))
+		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("algorithm"), k.Algo))
+		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("created"), k.Create))
+		if k.Expire != "" {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("expires"), k.Expire))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("expires"), "Never"))
+		}
+		sb.WriteString(pointStyle.Render("users")+":\n")
+		for _, u := range k.Users {
+			sb.WriteString(fmt.Sprintf("  - %s: %s\n", pointStyle.Render("name"), u.Name))
+			sb.WriteString(fmt.Sprintf("    %s: %s\n", pointStyle.Render("mail"), u.Mail))
+			sb.WriteString(fmt.Sprintf("    %s:  %s\n", pointStyle.Render("sig"), u.Sig))
+		}
+		return sb.String()
+	}
+	return "No item selected."
+}
