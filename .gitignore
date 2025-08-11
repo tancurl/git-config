@@ -4,7 +4,13 @@
 !*.sh
 !glk
 !parser
+!stow
+!bin
+!bin/glk
+!bin/parser
 #!Dockerfile
+
+bin/gcm
 
 # Created by https://www.toptal.com/developers/gitignore/api/go
 # Edit at https://www.toptal.com/developers/gitignore?templates=go

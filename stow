@@ -1,0 +1,18 @@
+#!/bin/sh
+
+name="bin"
+target="${HOME}/.local/${name}"
+
+if [ ! -d "${target}" ]; then
+	mkdir "${target}"
+fi
+
+case "${1}" in
+    -d|--delete|del|delete|d|rm)
+        find ${target} -type l -exec unlink {} \;
+        ;;
+    *)
+        stow "${name}" -t "${target}"
+        ;;
+esac
+
