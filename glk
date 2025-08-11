@@ -1,0 +1,130 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use POSIX "strftime";
+use Term::ANSIColor;
+
+# helper {{{
+
+# git print {{{
+sub git_print {
+    my @_msg = split(/ /, $_[0], 3);
+    my @_str = split(/'/, $_msg[2]);
+    printf("%s %s %s%s\n", 
+        color("green").$_msg[0].color("reset"),
+        color("reset").$_msg[1].color("reset"),
+        color("white").$_str[0].color("reset"),
+        color("yellow")."'".$_str[1]."'".color("reset")
+    );
+}
+# }}}
+
+# logger {{{
+sub log_print {
+
+	# get log location
+	my ($package, $filename, $line) = caller();
+	my ($level, $message) = @_;
+	$filename = substr($filename, rindex($filename, '/') + 1);
+
+	my $current_date = strftime("%Y-%-m-%d %H:%M:%S", localtime);
+
+	my $log_level;
+	my $log_color;
+	my $log_name;
+
+	unless ($level) {
+		return;
+	}
+
+	# log info and color
+	if ($level eq 2) {
+			$log_level = 2;
+			$log_name = "debug";
+	} elsif ($level eq 3) {
+			$log_level = 3;
+			$log_name = "warn";
+	} elsif ($level eq 4) {
+			$log_level = 4;
+			$log_name = "error";
+	} else {
+			$log_level = 1;
+			$log_name = "info";
+	}
+
+	# log style
+	if ($log_level eq 4) {
+		die("$current_date $filename :[$line]: $line $message\n");
+	} elsif ($log_level eq 3) {
+		warn("$current_date $filename :[$line]: $message\n");
+	} elsif ($log_level eq 2) {
+		print("$message\n");
+	} elsif ($log_level eq 1) {
+		print("$message");
+	} else {
+		print("$current_date $filename $message\n");
+	}
+
+}
+# }}}
+
+# git apply settings {{{
+sub git_apply {
+    my $key = $_[0];
+    my $name = $_[1];
+    my $email = $_[2];
+    my $commit = "~/.config/git/message-plain.txt";
+
+    my $cmd_key = "git config user.signingkey '$key'";
+    my $cmd_name = "git config user.name '$name'";
+    my $cmd_email = "git config user.email '$email'";
+    my $cmd_template = "git config user.email '$commit'";
+
+    if ($cmd_email =~ 'sinacomsys' || $cmd_email =~ 'hesmailzadeh95') {
+        $commit = "~/.config/git/message-sina.txt";
+        $cmd_template = "git config commit.template '$commit'";
+    }
+
+    my $cmd_commit = "git config commit.template '$commit'";
+
+    git_print("$cmd_key");
+    git_print("$cmd_name");
+    git_print("$cmd_email");
+    git_print("$cmd_commit");
+
+    system("$cmd_key");
+    system("$cmd_name");
+    system("$cmd_email");
+    system("$cmd_commit");
+
+}
+# }}}
+
+# }}}
+
+my $tmp_data = `gcm ~/.local/gpg.yml`;
+
+unless ($tmp_data) {
+    print(STDERR "Aborting git config\n");
+    exit 1;
+}
+
+my @tmp_array = split(/,/, $tmp_data);
+my %settings;
+for my $item (@tmp_array) {
+    my ($key, $value) = split(/:/, $item, 2);  # Limit to 2 parts to handle values with ':'
+    $settings{$key} = $value;
+    # print("[$key]\t$value\n");
+}
+
+git_apply($settings{key}, $settings{user}, $settings{email});
+
+# for my $item (@tmp_array) {
+#     my ($key, $value) = split(/:/, $item, 2);  # Limit to 2 parts to handle values with ':'
+#     print("$key: $value\n");
+# }
+
+# print("key\t$settings{key}\n");
+# print("user\t$settings{user}\n");
+# print("email\t$settings{email}\n");

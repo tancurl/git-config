@@ -14,3 +14,6 @@ test:
 
 clean:
 	@rm -rf $(BIN_DIR)
+
+install: build
+	@install -m 775 gcm /home/hos/.bin

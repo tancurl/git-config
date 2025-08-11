@@ -7,13 +7,12 @@ import (
     "os"
     "strings"
 
-    // "github.com/charmbracelet/bubbles/key"
     "github.com/charmbracelet/bubbles/list"
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/lipgloss"
     "gopkg.in/yaml.v3"
 
-    // "github.com/muesli/termenv"
+    "github.com/muesli/termenv"
 )
 
 type User struct {
@@ -70,15 +69,15 @@ var (
         Bold(false)
 
     titleStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#fafafa")).
-        Background(lipgloss.Color("#005577")).
+        Foreground(lipgloss.Color("#1e1e1e")).
+        Background(lipgloss.Color("#fafafa")).
         PaddingLeft(1).
         PaddingRight(1).
         Bold(true)
 
     statusMessageStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#fafafa")).
-        Background(lipgloss.Color("#770000")).
+        Foreground(lipgloss.Color("#1e1e1e")).
+        Background(lipgloss.Color("#fafafa")).
         PaddingLeft(1).
         PaddingRight(1).
         MarginBottom(1).
@@ -110,7 +109,7 @@ func main() {
         }
     }
 
-    // lipgloss.SetColorProfile(termenv.ANSI256)
+    lipgloss.SetColorProfile(termenv.ANSI256)
 
     const defaultHeight = 20
     const defaultWidth = 40
@@ -169,7 +168,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                             })
                         }
                         m.list.SetItems(userItems)
-                        // m.list.Title = "Select User"
                         m.selectingUser = true
                         return m, nil
                     }
