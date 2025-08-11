@@ -7,7 +7,10 @@ tidy:
 	@go mod tidy
 
 build:
-	@go build -o $(BIN_DIR)/$(BIN) .
+	go build -o $(BIN_DIR)/$(BIN) .
 
 test:
 	@go test ./...
+
+install: build
+	./stow
