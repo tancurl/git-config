@@ -3,6 +3,7 @@
 !*.pl
 !*.sh
 !glk
+!parser
 #!Dockerfile
 
 # Created by https://www.toptal.com/developers/gitignore/api/go
