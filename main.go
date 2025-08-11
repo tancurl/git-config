@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -44,35 +45,42 @@ func (i item) FilterValue() string { return i.title + " " + i.description }
 type model struct {
 	list     list.Model
 	choice   *KeyEntry
+	userChoice *User
 	quitting bool
+	selectingUser bool
 }
 
 var (
-	listStyle    = lipgloss.NewStyle().Width(40).MarginRight(2).Padding(1)
-	// previewStyle = lipgloss.NewStyle().Width(60).Padding(1).MarginTop(1)
-
-	// listStyle = lipgloss.NewStyle().
-	// 	Width(60).
-	// 	Padding(1).
-	// 	MarginTop(1).
-	// 	Foreground(lipgloss.Color("#00ff00")). // bright green text
-	// 	Background(lipgloss.Color("#000000")). // black background
-	// 	Bold(true)
+	listStyle = lipgloss.NewStyle().
+		Width(40).
+		MarginRight(2).
+		Padding(1)
 
 	previewStyle = lipgloss.NewStyle().
 		Width(60).
-		Padding(4).
+		Padding(1).
 		MarginLeft(1).
 		Foreground(lipgloss.Color("#FAFAFA")).   // light gray text
-		// Background(lipgloss.Color("#1E1E1E")).   // dark background
 		Bold(false)
 
 	pointStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#aaaaaa")).   // light gray text
-		// Background(lipgloss.Color("#1E1E1E")).   // dark background
 		Bold(false)
 
-	statusMessageStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#04B575"}).Render
+	titleStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.CompleteColor{TrueColor: "#005577", ANSI256: "4", ANSI: "4"}).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Bold(true)
+
+	statusMessageStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.CompleteColor{TrueColor: "#770000", ANSI256: "1", ANSI: "1"}).
+		PaddingLeft(1).
+		PaddingRight(1).
+		MarginBottom(1).
+		Bold(true)
 )
 
 func main() {
@@ -104,18 +112,74 @@ func main() {
 	const defaultWidth = 40
 	l := list.New(items, list.NewDefaultDelegate(), defaultWidth, defaultHeight)
 	l.Title = "Git Config Manager"
+	l.Styles.Title = titleStyle
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 
 	m := model{list: l}
-	if err := tea.NewProgram(m).Start(); err != nil {
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	// After TUI exits, print the selected item
+	if fm, ok := finalModel.(model); ok && fm.choice != nil && fm.userChoice != nil {
+		fmt.Printf("key:%s,", fm.choice.Key)
+		fmt.Printf("algo:%s,", fm.choice.Algo)
+		fmt.Printf("created:%s,", fm.choice.Create)
+		if fm.choice.Expire == "" {
+			fmt.Printf("expire:%s,", "never")
+		} else {
+			fmt.Printf("expire:%s,", fm.choice.Expire)
+		}
+		fmt.Printf("user:%s,email:%s,sig:%s",
+		fm.userChoice.Name, fm.userChoice.Mail, fm.userChoice.Sig)
+	}
+
+
 }
 
 func (m model) Init() tea.Cmd {
 	return nil
+}
+
+type listKeyMap struct {
+	toggleSpinner    key.Binding
+	toggleTitleBar   key.Binding
+	toggleStatusBar  key.Binding
+	togglePagination key.Binding
+	toggleHelpMenu   key.Binding
+	insertItem       key.Binding
+}
+func newListKeyMap() *listKeyMap {
+	return &listKeyMap{
+		insertItem: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add item"),
+		),
+		toggleSpinner: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "toggle spinner"),
+		),
+		toggleTitleBar: key.NewBinding(
+			key.WithKeys("T"),
+			key.WithHelp("T", "toggle title"),
+		),
+		toggleStatusBar: key.NewBinding(
+			key.WithKeys("S"),
+			key.WithHelp("S", "toggle status"),
+		),
+		togglePagination: key.NewBinding(
+			key.WithKeys("P"),
+			key.WithHelp("P", "toggle pagination"),
+		),
+		toggleHelpMenu: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "toggle help"),
+		),
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -123,16 +187,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			if i, ok := m.list.SelectedItem().(item); ok {
-				m.choice = &i.entry
-				fmt.Println(pointStyle.Render("Selected Key:"), m.choice.Key)
-				fmt.Println("Algorithm:", m.choice.Algo)
-				fmt.Println("Created:", m.choice.Create)
-				fmt.Println("Expire:", m.choice.Expire)
-				for _, u := range m.choice.Users {
-					fmt.Printf("User: %s <%s> sig: %s\n", u.Name, u.Mail, u.Sig)
+			if !m.selectingUser {
+				if i, ok := m.list.SelectedItem().(item); ok {
+					m.choice = &i.entry
+					if len(m.choice.Users) > 1 {
+						// Switch to user selection mode
+						userItems := []list.Item{}
+						for _, u := range m.choice.Users {
+							userItems = append(userItems, item{
+								title: u.Name,
+								description: u.Mail,
+								entry: *m.choice, // keep full entry for final output
+							})
+						}
+						m.list.SetItems(userItems)
+						// m.list.Title = "Select User"
+						m.selectingUser = true
+						return m, nil
+					}
+					// Only one user
+					m.userChoice = &m.choice.Users[0]
+					return m, tea.Quit
 				}
-				return m, tea.Quit
+			} else {
+				if i, ok := m.list.SelectedItem().(item); ok {
+					for _, u := range m.choice.Users {
+						if u.Name == i.title && u.Mail == i.description {
+							m.userChoice = &u
+							break
+						}
+					}
+					return m, tea.Quit
+				}
 			}
 		case "q", "esc":
 			m.quitting = true
@@ -146,7 +232,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	if m.choice != nil {
+	if m.choice != nil && (!m.selectingUser || m.userChoice != nil) {
 		return ""
 	}
 
@@ -157,9 +243,21 @@ func (m model) View() string {
 }
 
 func (m model) previewView() string {
+	if m.selectingUser {
+		if i, ok := m.list.SelectedItem().(item); ok {
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("%s\n", statusMessageStyle.Render("Select User")))
+			sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("key"), i.entry.Key))
+			sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("name"), i.title))
+			sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("mail"), i.description))
+			return sb.String()
+		}
+		return "No user selected."
+	}
 	if i, ok := m.list.SelectedItem().(item); ok {
-		k := i.entry
 		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("%s\n", statusMessageStyle.Render("Preview")))
+		k := i.entry
 		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("key"), k.Key))
 		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("algorithm"), k.Algo))
 		sb.WriteString(fmt.Sprintf("%s: %s\n", pointStyle.Render("created"), k.Create))
