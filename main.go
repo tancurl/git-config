@@ -13,7 +13,7 @@ import (
     "github.com/charmbracelet/lipgloss"
     "gopkg.in/yaml.v3"
 
-    "github.com/muesli/termenv"
+    // "github.com/muesli/termenv"
 )
 
 type User struct {
@@ -45,10 +45,10 @@ func (i item) Description() string { return i.description }
 func (i item) FilterValue() string { return i.title + " " + i.description }
 
 type model struct {
-    list     list.Model
-    choice   *KeyEntry
-    userChoice *User
-    quitting bool
+    list          list.Model
+    choice       *KeyEntry
+    userChoice   *User
+    quitting      bool
     selectingUser bool
 }
 
@@ -62,23 +62,23 @@ var (
         Width(60).
         Padding(1).
         MarginLeft(1).
-        Foreground(lipgloss.Color("#FAFAFA")).
+        Foreground(lipgloss.Color("#fafafa")).
         Bold(false)
 
     pointStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#aaaaaa")).
+        Foreground(lipgloss.Color("#afafaf")).
         Bold(false)
 
     titleStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#FAFAFA")).
-        Background(lipgloss.CompleteColor{TrueColor: "#005577", ANSI256: "4", ANSI: "4"}).
+        Foreground(lipgloss.Color("#fafafa")).
+        Background(lipgloss.Color("#005577")).
         PaddingLeft(1).
         PaddingRight(1).
         Bold(true)
 
     statusMessageStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#FAFAFA")).
-        Background(lipgloss.CompleteColor{TrueColor: "#770000", ANSI256: "1", ANSI: "1"}).
+        Foreground(lipgloss.Color("#fafafa")).
+        Background(lipgloss.Color("#770000")).
         PaddingLeft(1).
         PaddingRight(1).
         MarginBottom(1).
@@ -110,7 +110,7 @@ func main() {
         }
     }
 
-    lipgloss.SetColorProfile(termenv.ANSI256)
+    // lipgloss.SetColorProfile(termenv.ANSI256)
 
     const defaultHeight = 20
     const defaultWidth = 40
@@ -122,8 +122,6 @@ func main() {
     l.SetFilteringEnabled(true)
 
     m := model{list: l}
-    // start in the alternate screen and render the TUI to stderr so stdout
-    // remains usable for piping (e.g. `| grep ...`)
     p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithOutput(os.Stderr))
     finalModel, err := p.Run()
     if err != nil {
@@ -151,6 +149,9 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		h, v := listStyle.GetFrameSize()
+		m.list.SetSize(msg.Width-h, msg.Height-v)
     case tea.KeyMsg:
         switch msg.String() {
         case "enter":
@@ -187,7 +188,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                     return m, tea.Quit
                 }
             }
-        case "ctrl+c", "esc":
+        case "ctrl+q", "ctrl+c", "q", "esc":
             m.quitting = true
             return m, tea.Quit
         }
