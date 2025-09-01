@@ -12,7 +12,10 @@ case "${1}" in
         find ${target} -type l -exec unlink {} \;
         ;;
     *)
-        stow "${name}" -t "${target}"
+        for bin in $name/*; do
+            printf 'stow: %s -> %s\n' $bin $target
+        done
+        stow "${name}" -t "${target}" $@
         ;;
 esac
 

@@ -13,4 +13,4 @@ test:
 	@go test ./...
 
 install: build
-	./stow
+	@./stow
