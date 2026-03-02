@@ -103,7 +103,7 @@ sub git_apply {
 
 # }}}
 
-my $tmp_data = `gcm ~/.local/gpg.yml`;
+my $tmp_data = `glk-menu ~/.local/gpg.yml`;
 
 unless ($tmp_data) {
     print(STDERR "Aborting git config\n");

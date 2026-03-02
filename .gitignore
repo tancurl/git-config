@@ -6,8 +6,7 @@
 !parser
 !stow
 !bin
-!bin/glk
-!bin/parser
+!bin/glk*
 #!Dockerfile
 
 bin/gcm
